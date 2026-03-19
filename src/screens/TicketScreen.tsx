@@ -36,8 +36,24 @@ export default function TicketScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadTickets().then(setTickets);
-      loadHorses().then(setHorses);
+      let mounted = true;
+      Promise.all([loadTickets(), loadHorses()])
+        .then(([ticketData, horseData]) => {
+          if (!mounted) return;
+          setTickets(ticketData);
+          setHorses(horseData);
+        })
+        .catch(() => {
+          if (mounted) {
+            Alert.alert('読み込みエラー', '馬券データの読み込みに失敗しました');
+            setTickets([]);
+            setHorses([]);
+          }
+        });
+
+      return () => {
+        mounted = false;
+      };
     }, [])
   );
 
@@ -63,10 +79,14 @@ export default function TicketScreen() {
       memo: '',
       createdAt: Date.now(),
     };
-    await saveTicket(ticket);
-    setTickets(t => [...t, ticket]);
-    setSelectedHorseIds([]);
-    setModalVisible(false);
+    try {
+      await saveTicket(ticket);
+      setTickets(t => [...t, ticket]);
+      setSelectedHorseIds([]);
+      setModalVisible(false);
+    } catch {
+      Alert.alert('保存に失敗しました', '時間をおいて再試行してください');
+    }
   }
 
   function horseName(id: string) {
@@ -78,8 +98,12 @@ export default function TicketScreen() {
       { text: 'キャンセル', style: 'cancel' },
       {
         text: '削除', style: 'destructive', onPress: async () => {
-          await deleteTicket(ticket.id);
-          setTickets(t => t.filter(x => x.id !== ticket.id));
+          try {
+            await deleteTicket(ticket.id);
+            setTickets(t => t.filter(x => x.id !== ticket.id));
+          } catch {
+            Alert.alert('削除に失敗しました', '時間をおいて再試行してください');
+          }
         }
       },
     ]);

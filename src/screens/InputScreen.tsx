@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { calcStats, saveHorse } from '../store/horses';
 import { Horse } from '../types';
+import { parseRaceCount, sanitizeRaceInput } from '../utils/raceInput';
 
 const GREEN = '#006934';
 const LIGHT_GREEN = '#E8F5EE';
@@ -28,17 +29,30 @@ export default function InputScreen({ onSaved }: Props) {
   const [third, setThird] = useState('');
   const [other, setOther] = useState('');
 
-  const w = parseInt(wins) || 0;
-  const s = parseInt(second) || 0;
-  const t = parseInt(third) || 0;
-  const o = parseInt(other) || 0;
+  const winsParsed = parseRaceCount(wins);
+  const secondParsed = parseRaceCount(second);
+  const thirdParsed = parseRaceCount(third);
+  const otherParsed = parseRaceCount(other);
+
+  const w = winsParsed.value;
+  const s = secondParsed.value;
+  const t = thirdParsed.value;
+  const o = otherParsed.value;
+
+  const hasInvalidInput =
+    !winsParsed.valid || !secondParsed.valid || !thirdParsed.valid || !otherParsed.valid;
+
   const stats = calcStats(w, s, t, o);
 
-  const hasInput = w + s + t + o > 0;
+  const hasInput = !hasInvalidInput && w + s + t + o > 0;
 
   async function handleSave() {
     if (!name.trim()) {
       Alert.alert('馬名を入力してください');
+      return;
+    }
+    if (hasInvalidInput) {
+      Alert.alert('戦歴は0以上の整数で入力してください');
       return;
     }
     if (!hasInput) {
@@ -55,21 +69,24 @@ export default function InputScreen({ onSaved }: Props) {
       ...stats,
       createdAt: Date.now(),
     };
-    await saveHorse(horse);
-    Alert.alert('保存しました', `${horse.name} を保存しました`);
-    setName('');
-    setWins('');
-    setSecond('');
-    setThird('');
-    setOther('');
-    onSaved?.();
+    try {
+      await saveHorse(horse);
+      Alert.alert(`${horse.name} を保存しました`);
+      setName('');
+      setWins('');
+      setSecond('');
+      setThird('');
+      setOther('');
+      onSaved?.();
+    } catch {
+      Alert.alert('保存に失敗しました', '時間をおいて再試行してください');
+    }
   }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Text style={styles.title}>戦歴入力</Text>
-        <Text style={styles.subtitle}>例: (4.3.2.1) = 4勝3着2着3着4着以下1回</Text>
 
         {/* 馬名 */}
         <View style={styles.card}>
@@ -98,7 +115,7 @@ export default function InputScreen({ onSaved }: Props) {
                 <TextInput
                   style={styles.numInput}
                   value={value}
-                  onChangeText={set}
+                  onChangeText={text => set(sanitizeRaceInput(text))}
                   keyboardType="number-pad"
                   placeholder="0"
                   placeholderTextColor="#AAA"
