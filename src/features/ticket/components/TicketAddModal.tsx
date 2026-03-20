@@ -2,19 +2,41 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Horse, Ticket, TicketType } from '../../../types';
 import { generateTicketCombinations } from '../combinations';
-import { COMBINATION_MODES, MODE_LABELS, TICKET_TYPE_CONFIGS, getTicketTypeConfig } from '../constants';
-import { createEmptyFormationFrames, formatCombinationHorseNames } from '../helpers';
-import { AddTicketTab, CombinationMode } from '../types';
+import { TICKET_TYPE_CONFIGS, getTicketTypeConfig } from '../constants';
+import { createEmptyFormationFrames } from '../helpers';
+import { CombinationMode } from '../types';
+import HorseSelectionMatrix, { HorseSelectionColumn, HorseSelectionRow } from './HorseSelectionMatrix';
 
 const GREEN = '#006934';
-const LIGHT_GREEN = '#E8F5EE';
 const BORDER = '#B2D8C4';
+
+const COMBINATION_MODE_TABS: ReadonlyArray<{ mode: CombinationMode; label: string }> = [
+  { mode: 'formation', label: '通常フォーメーション' },
+  { mode: 'nagashi', label: 'ながし' },
+  { mode: 'box', label: 'ボックス' },
+];
+
+const COMBINATION_MODE_SUMMARY_LABEL: Record<CombinationMode, string> = {
+  formation: '通常フォーメーション',
+  nagashi: 'ながし',
+  box: 'ボックス',
+};
 
 interface TicketAddModalProps {
   visible: boolean;
   horses: Horse[];
   onClose: () => void;
   onSubmitTicket: (ticket: Ticket) => Promise<void>;
+}
+
+interface SelectionSummaryLine {
+  label: string;
+  value: string;
+}
+
+interface HorseRecordLines {
+  top: string;
+  bottom: string;
 }
 
 function uniqueHorseIds(horseIds: readonly string[]): string[] {
@@ -64,13 +86,19 @@ function previewTicket(
   };
 }
 
+function formatHorseRecord(horse: Horse): HorseRecordLines {
+  return {
+    top: `${horse.wins}-${horse.second}-${horse.third}-${horse.other}（${horse.totalRaces}戦）`,
+    bottom: `勝率${horse.winRate.toFixed(1)}%・複勝率${horse.placeRate.toFixed(1)}%`,
+  };
+}
+
 export default function TicketAddModal({ visible, horses, onClose, onSubmitTicket }: TicketAddModalProps) {
   const [selectedType, setSelectedType] = useState<TicketType>('単勝');
-  const [addTab, setAddTab] = useState<AddTicketTab>('normal');
 
   const [normalHorseIds, setNormalHorseIds] = useState<string[]>([]);
 
-  const [combinationMode, setCombinationMode] = useState<CombinationMode>('nagashi');
+  const [combinationMode, setCombinationMode] = useState<CombinationMode>('formation');
   const [multi, setMulti] = useState(false);
   const [nagashiAxis, setNagashiAxis] = useState('');
   const [nagashiOpponents, setNagashiOpponents] = useState<string[]>([]);
@@ -79,29 +107,96 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
 
   const typeConfig = getTicketTypeConfig(selectedType);
   const canUseCombinationTab = typeConfig.combinationEnabled;
-  const supportsMulti = typeConfig.ordered && (combinationMode === 'nagashi' || combinationMode === 'formation');
+  const activeMode: Ticket['mode'] = canUseCombinationTab ? combinationMode : 'normal';
+  const supportsMulti = typeConfig.ordered && (activeMode === 'nagashi' || activeMode === 'formation');
 
   const horsesById = useMemo(() => new Map(horses.map(horse => [horse.id, horse])), [horses]);
+
+  const matrixRows = useMemo<HorseSelectionRow[]>(
+    () =>
+      horses.map((horse, index) => {
+        const record = formatHorseRecord(horse);
+        return {
+          id: horse.id,
+          label: horse.name.trim() || `馬${index + 1}`,
+          subLabelTop: record.top,
+          subLabelBottom: record.bottom,
+        };
+      }),
+    [horses]
+  );
+
+  const singleSelectColumns = useMemo<readonly HorseSelectionColumn[]>(
+    () => [{ key: 'select', label: '選択' }],
+    []
+  );
+
+  const formationColumns = useMemo<HorseSelectionColumn[]>(
+    () =>
+      Array.from({ length: typeConfig.horseCount }, (_, index) => ({
+        key: `frame-${index}`,
+        label: `${index + 1}頭目`,
+      })),
+    [typeConfig.horseCount]
+  );
+
+  const formationSelectedByColumn = useMemo<Readonly<Record<string, readonly string[]>>>(
+    () =>
+      formationColumns.reduce<Record<string, readonly string[]>>((acc, column, index) => {
+        acc[column.key] = formationFrames[index] ?? [];
+        return acc;
+      }, {}),
+    [formationColumns, formationFrames]
+  );
+
+  const nagashiColumns = useMemo<readonly HorseSelectionColumn[]>(
+    () => [
+      { key: 'axis', label: '軸', controlType: 'radio' },
+      { key: 'opponents', label: '相手' },
+    ],
+    []
+  );
+
+  const nagashiSelectedByColumn = useMemo<Readonly<Record<string, readonly string[]>>>(
+    () => ({
+      axis: nagashiAxis ? [nagashiAxis] : [],
+      opponents: nagashiOpponents,
+    }),
+    [nagashiAxis, nagashiOpponents]
+  );
+
+  const normalSelectedByColumn = useMemo<Readonly<Record<string, readonly string[]>>>(
+    () => ({ select: normalHorseIds }),
+    [normalHorseIds]
+  );
+
+  const boxSelectedByColumn = useMemo<Readonly<Record<string, readonly string[]>>>(
+    () => ({ select: boxHorseIds }),
+    [boxHorseIds]
+  );
 
   function resolveHorseName(horseId: string): string {
     return horsesById.get(horseId)?.name ?? '?';
   }
 
+  function summarizeHorseNames(horseIds: readonly string[]): string {
+    if (horseIds.length === 0) return '-';
+    return horseIds.map(resolveHorseName).join(', ');
+  }
+
   function resetForType(type: TicketType): void {
     const config = getTicketTypeConfig(type);
     setNormalHorseIds([]);
-    setCombinationMode('nagashi');
+    setCombinationMode('formation');
     setMulti(false);
     setNagashiAxis('');
     setNagashiOpponents([]);
     setBoxHorseIds([]);
     setFormationFrames(createEmptyFormationFrames(config.horseCount));
-    setAddTab('normal');
   }
 
   useEffect(() => {
     if (!visible) return;
-
     setSelectedType('単勝');
     resetForType('単勝');
   }, [visible]);
@@ -112,10 +207,6 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
     const config = getTicketTypeConfig(selectedType);
     setFormationFrames(createEmptyFormationFrames(config.horseCount));
     setMulti(false);
-
-    if (!config.combinationEnabled) {
-      setAddTab('normal');
-    }
   }, [selectedType, visible]);
 
   useEffect(() => {
@@ -125,25 +216,20 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
   }, [supportsMulti]);
 
   const preview = useMemo(() => {
-    const ticket = previewTicket(
-      selectedType,
-      addTab === 'combination' && canUseCombinationTab ? combinationMode : 'normal',
-      addTab === 'combination' && canUseCombinationTab
-        ? combinationMode === 'nagashi'
+    const selection: Ticket['selection'] =
+      activeMode === 'normal'
+        ? { kind: 'normal', horses: uniqueHorseIds(normalHorseIds) }
+        : activeMode === 'nagashi'
           ? { kind: 'nagashi', axis: nagashiAxis, opponents: uniqueHorseIds(nagashiOpponents) }
-          : combinationMode === 'box'
+          : activeMode === 'box'
             ? { kind: 'box', horses: uniqueHorseIds(boxHorseIds) }
-            : { kind: 'formation', frames: formationFrames.map(frame => uniqueHorseIds(frame)) }
-        : { kind: 'normal', horses: uniqueHorseIds(normalHorseIds) },
-      supportsMulti ? multi : false
-    );
+            : { kind: 'formation', frames: formationFrames.map(frame => uniqueHorseIds(frame)) };
 
+    const ticket = previewTicket(selectedType, activeMode, selection, supportsMulti ? multi : false);
     return generateTicketCombinations(ticket);
   }, [
-    addTab,
+    activeMode,
     boxHorseIds,
-    canUseCombinationTab,
-    combinationMode,
     formationFrames,
     multi,
     nagashiAxis,
@@ -153,7 +239,34 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
     supportsMulti,
   ]);
 
-  const previewTop = preview.slice(0, 5);
+  const selectionSummaryLines = useMemo<SelectionSummaryLine[]>(() => {
+    if (activeMode === 'normal') {
+      return [{ label: '選択', value: summarizeHorseNames(uniqueHorseIds(normalHorseIds)) }];
+    }
+
+    if (activeMode === 'box') {
+      return [{ label: '選択', value: summarizeHorseNames(uniqueHorseIds(boxHorseIds)) }];
+    }
+
+    if (activeMode === 'nagashi') {
+      return [
+        { label: '軸', value: nagashiAxis ? resolveHorseName(nagashiAxis) : '-' },
+        { label: '相手', value: summarizeHorseNames(uniqueHorseIds(nagashiOpponents)) },
+      ];
+    }
+
+    return formationFrames.map((frame, index) => ({
+      label: `${index + 1}頭目`,
+      value: summarizeHorseNames(uniqueHorseIds(frame)),
+    }));
+  }, [activeMode, boxHorseIds, formationFrames, horsesById, nagashiAxis, nagashiOpponents, normalHorseIds]);
+
+  const summaryTitle = useMemo(() => {
+    if (activeMode === 'normal') {
+      return selectedType;
+    }
+    return `${selectedType} ${COMBINATION_MODE_SUMMARY_LABEL[activeMode]}`;
+  }, [activeMode, selectedType]);
 
   function toggleNormalHorse(horseId: string): void {
     setNormalHorseIds(prev => {
@@ -163,6 +276,11 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
       }
       return [...prev, horseId];
     });
+  }
+
+  function toggleNormalMatrixCell(columnKey: string, horseId: string): void {
+    if (columnKey !== 'select') return;
+    toggleNormalHorse(horseId);
   }
 
   function toggleNagashiOpponent(horseId: string): void {
@@ -194,17 +312,45 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
     });
   }
 
+  function toggleFormationMatrixCell(columnKey: string, horseId: string): void {
+    const frameIndex = formationColumns.findIndex(column => column.key === columnKey);
+    if (frameIndex < 0) return;
+    toggleFormationHorse(frameIndex, horseId);
+  }
+
+  function toggleNagashiMatrixCell(columnKey: string, horseId: string): void {
+    if (columnKey === 'axis') {
+      setNagashiAxis(prev => (prev === horseId ? '' : horseId));
+      setNagashiOpponents(prev => prev.filter(id => id !== horseId));
+      return;
+    }
+
+    if (columnKey === 'opponents') {
+      toggleNagashiOpponent(horseId);
+    }
+  }
+
+  function isNagashiMatrixCellDisabled(columnKey: string, horseId: string): boolean {
+    if (columnKey === 'opponents') {
+      return nagashiAxis === horseId;
+    }
+    return false;
+  }
+
+  function toggleBoxMatrixCell(columnKey: string, horseId: string): void {
+    if (columnKey !== 'select') return;
+    toggleBoxHorse(horseId);
+  }
+
   async function handleSubmit(): Promise<void> {
     if (horses.length === 0) {
       Alert.alert('保存した馬がありません');
       return;
     }
 
-    const isCombination = addTab === 'combination' && canUseCombinationTab;
-
     let ticket: Ticket;
 
-    if (!isCombination) {
+    if (activeMode === 'normal') {
       const horsesSelected = uniqueHorseIds(normalHorseIds);
       if (horsesSelected.length !== typeConfig.horseCount) {
         Alert.alert(`${typeConfig.horseCount}頭選択してください`);
@@ -220,7 +366,7 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
         },
         false
       );
-    } else if (combinationMode === 'box') {
+    } else if (activeMode === 'box') {
       const horsesSelected = uniqueHorseIds(boxHorseIds);
       if (horsesSelected.length < typeConfig.horseCount) {
         Alert.alert(`BOXは最低${typeConfig.horseCount}頭選択してください`);
@@ -236,7 +382,7 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
         },
         false
       );
-    } else if (combinationMode === 'nagashi') {
+    } else if (activeMode === 'nagashi') {
       const opponents = uniqueHorseIds(nagashiOpponents).filter(id => id !== nagashiAxis);
       if (!nagashiAxis) {
         Alert.alert('流しの軸馬を選択してください');
@@ -301,9 +447,7 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
             <Text style={styles.cancelBtn}>キャンセル</Text>
           </TouchableOpacity>
           <Text style={styles.modalTitle}>馬券を追加</Text>
-          <TouchableOpacity onPress={() => void handleSubmit()}>
-            <Text style={styles.doneBtn}>追加</Text>
-          </TouchableOpacity>
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalContentContainer}>
@@ -327,227 +471,107 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
             ))}
           </View>
 
-          <Text style={styles.sectionLabel}>入力モード</Text>
-          <View style={styles.tabRow}>
-            <TouchableOpacity
-              style={[styles.tabButton, addTab === 'normal' && styles.tabButtonActive]}
-              onPress={() => setAddTab('normal')}
-            >
-              <Text style={[styles.tabButtonText, addTab === 'normal' && styles.tabButtonTextActive]}>
-                通常
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.tabButton,
-                addTab === 'combination' && styles.tabButtonActive,
-                !canUseCombinationTab && styles.tabButtonDisabled,
-              ]}
-              onPress={() => {
-                if (!canUseCombinationTab) return;
-                setAddTab('combination');
-              }}
-              disabled={!canUseCombinationTab}
-            >
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  addTab === 'combination' && styles.tabButtonTextActive,
-                  !canUseCombinationTab && styles.tabButtonTextDisabled,
-                ]}
-              >
-                フォーメーション
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {!canUseCombinationTab && (
-            <Text style={styles.disabledHint}>単勝・複勝は通常入力のみ対応です</Text>
-          )}
-
-          {addTab === 'normal' || !canUseCombinationTab ? (
+          {canUseCombinationTab && (
             <>
-              <Text style={styles.sectionLabel}>馬を選択（{typeConfig.horseCount}頭）</Text>
-              {horses.map(horse => (
-                <TouchableOpacity
-                  key={horse.id}
-                  style={[
-                    styles.horseOption,
-                    normalHorseIds.includes(horse.id) && styles.horseOptionActive,
-                  ]}
-                  onPress={() => toggleNormalHorse(horse.id)}
-                >
-                  <Text
-                    style={[
-                      styles.horseOptionName,
-                      normalHorseIds.includes(horse.id) && styles.horseOptionNameActive,
-                    ]}
-                  >
-                    {horse.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.horseOptionStats,
-                      normalHorseIds.includes(horse.id) && styles.horseOptionStatsActive,
-                    ]}
-                  >
-                    勝率{horse.winRate.toFixed(1)}% / 複勝率{horse.placeRate.toFixed(1)}%
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </>
-          ) : (
-            <>
-              <Text style={styles.sectionLabel}>フォーメーション方式</Text>
-              <View style={styles.typeGrid}>
-                {COMBINATION_MODES.map(mode => (
+              <Text style={styles.sectionLabel}>方式選択</Text>
+              <View style={styles.methodGrid}>
+                {COMBINATION_MODE_TABS.map(tab => (
                   <TouchableOpacity
-                    key={mode}
-                    style={[styles.typeOption, combinationMode === mode && styles.typeOptionActive]}
-                    onPress={() => setCombinationMode(mode)}
+                    key={tab.mode}
+                    style={[styles.methodOption, combinationMode === tab.mode && styles.methodOptionActive]}
+                    onPress={() => setCombinationMode(tab.mode)}
                   >
                     <Text
                       style={[
-                        styles.typeOptionText,
-                        combinationMode === mode && styles.typeOptionTextActive,
+                        styles.methodOptionText,
+                        combinationMode === tab.mode && styles.methodOptionTextActive,
                       ]}
                     >
-                      {MODE_LABELS[mode]}
+                      {tab.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-
-              {supportsMulti && (
-                <TouchableOpacity style={styles.multiToggle} onPress={() => setMulti(prev => !prev)}>
-                  <Text style={styles.multiText}>{multi ? 'マルチ: ON' : 'マルチ: OFF'}</Text>
-                </TouchableOpacity>
-              )}
-
-              {combinationMode === 'nagashi' && (
-                <>
-                  <Text style={styles.sectionLabel}>軸馬（1頭）</Text>
-                  {horses.map(horse => (
-                    <TouchableOpacity
-                      key={`axis-${horse.id}`}
-                      style={[styles.horseOption, nagashiAxis === horse.id && styles.horseOptionActive]}
-                      onPress={() => {
-                        setNagashiAxis(prev => (prev === horse.id ? '' : horse.id));
-                        setNagashiOpponents(prev => prev.filter(id => id !== horse.id));
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.horseOptionName,
-                          nagashiAxis === horse.id && styles.horseOptionNameActive,
-                        ]}
-                      >
-                        {horse.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-
-                  <Text style={styles.sectionLabel}>相手馬（複数可）</Text>
-                  {horses.map(horse => {
-                    const selected = nagashiOpponents.includes(horse.id);
-                    const disabled = nagashiAxis === horse.id;
-
-                    return (
-                      <TouchableOpacity
-                        key={`opp-${horse.id}`}
-                        style={[
-                          styles.horseOption,
-                          selected && styles.horseOptionActive,
-                          disabled && styles.horseOptionDisabled,
-                        ]}
-                        onPress={() => toggleNagashiOpponent(horse.id)}
-                        disabled={disabled}
-                      >
-                        <Text
-                          style={[
-                            styles.horseOptionName,
-                            selected && styles.horseOptionNameActive,
-                            disabled && styles.horseOptionNameDisabled,
-                          ]}
-                        >
-                          {horse.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              )}
-
-              {combinationMode === 'box' && (
-                <>
-                  <Text style={styles.sectionLabel}>BOX対象馬（{typeConfig.horseCount}頭以上）</Text>
-                  {horses.map(horse => {
-                    const selected = boxHorseIds.includes(horse.id);
-                    return (
-                      <TouchableOpacity
-                        key={`box-${horse.id}`}
-                        style={[styles.horseOption, selected && styles.horseOptionActive]}
-                        onPress={() => toggleBoxHorse(horse.id)}
-                      >
-                        <Text
-                          style={[
-                            styles.horseOptionName,
-                            selected && styles.horseOptionNameActive,
-                          ]}
-                        >
-                          {horse.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              )}
-
-              {combinationMode === 'formation' && (
-                <>
-                  {formationFrames.map((frame, frameIndex) => (
-                    <View key={`frame-${frameIndex}`} style={styles.formationSection}>
-                      <Text style={styles.sectionLabel}>{frameIndex + 1}列目</Text>
-                      {horses.map(horse => {
-                        const selected = frame.includes(horse.id);
-                        return (
-                          <TouchableOpacity
-                            key={`frame-${frameIndex}-${horse.id}`}
-                            style={[styles.horseOption, selected && styles.horseOptionActive]}
-                            onPress={() => toggleFormationHorse(frameIndex, horse.id)}
-                          >
-                            <Text
-                              style={[
-                                styles.horseOptionName,
-                                selected && styles.horseOptionNameActive,
-                              ]}
-                            >
-                              {horse.name}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  ))}
-                </>
-              )}
             </>
           )}
 
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>生成プレビュー</Text>
-            <Text style={styles.previewCount}>点数: {preview.length}点</Text>
-            {previewTop.length > 0 ? (
-              previewTop.map((combination, index) => (
-                <Text key={combination.key} style={styles.previewLine}>
-                  {index + 1}.{' '}
-                  {formatCombinationHorseNames(combination.horseIds, resolveHorseName, typeConfig.ordered)}
-                </Text>
-              ))
-            ) : (
-              <Text style={styles.previewLine}>条件を選択すると表示されます</Text>
-            )}
-          </View>
+          {supportsMulti && (
+            <TouchableOpacity style={styles.multiToggle} onPress={() => setMulti(prev => !prev)}>
+              <Text style={styles.multiText}>{multi ? 'マルチ: ON' : 'マルチ: OFF'}</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.sectionLabel}>組み合わせ選択</Text>
+          {activeMode === 'normal' && (
+            <HorseSelectionMatrix
+              horses={matrixRows}
+              columns={singleSelectColumns}
+              selectedByColumn={normalSelectedByColumn}
+              onToggleCell={toggleNormalMatrixCell}
+              horseHeaderLabel="馬"
+            />
+          )}
+
+          {activeMode === 'nagashi' && (
+            <>
+              <HorseSelectionMatrix
+                horses={matrixRows}
+                columns={nagashiColumns}
+                selectedByColumn={nagashiSelectedByColumn}
+                onToggleCell={toggleNagashiMatrixCell}
+                isCellDisabled={isNagashiMatrixCellDisabled}
+                horseHeaderLabel="馬"
+              />
+              <Text style={styles.selectionHint}>
+                軸は1頭、相手は最低{Math.max(1, typeConfig.horseCount - 1)}頭を選択してください
+              </Text>
+            </>
+          )}
+
+          {activeMode === 'box' && (
+            <HorseSelectionMatrix
+              horses={matrixRows}
+              columns={singleSelectColumns}
+              selectedByColumn={boxSelectedByColumn}
+              onToggleCell={toggleBoxMatrixCell}
+              horseHeaderLabel="馬"
+            />
+          )}
+
+          {activeMode === 'formation' && (
+            <>
+              <HorseSelectionMatrix
+                horses={matrixRows}
+                columns={formationColumns}
+                selectedByColumn={formationSelectedByColumn}
+                onToggleCell={toggleFormationMatrixCell}
+                horseHeaderLabel="馬"
+              />
+              <Text style={styles.selectionHint}>各列で1頭以上を選択してください</Text>
+            </>
+          )}
         </ScrollView>
+
+        <View style={styles.bottomPanel}>
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeaderRow}>
+              <Text style={styles.summaryTitle}>{summaryTitle}</Text>
+              <Text style={styles.summaryPoint}>{preview.length}点</Text>
+            </View>
+            {selectionSummaryLines.map(line => (
+              <View key={line.label} style={styles.summaryLineRow}>
+                <Text style={styles.summaryLineLabel}>{line.label}</Text>
+                <Text style={styles.summaryLineValue} numberOfLines={2}>
+                  {line.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.submitBtn} onPress={() => void handleSubmit()}>
+            <Text style={styles.submitBtnText}>追加</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
@@ -562,7 +586,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     backgroundColor: '#FFF',
@@ -570,23 +595,21 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#222',
+    color: '#22322B',
   },
   cancelBtn: {
-    color: '#888',
+    color: '#5D6D65',
     fontSize: 15,
   },
-  doneBtn: {
-    color: GREEN,
-    fontSize: 15,
-    fontWeight: '700',
+  headerSpacer: {
+    width: 66,
   },
   modalContent: {
     flex: 1,
-    paddingHorizontal: 16,
   },
   modalContentContainer: {
-    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingBottom: 220,
   },
   sectionLabel: {
     fontSize: 13,
@@ -601,95 +624,54 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   typeOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    minWidth: 74,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: '#FFF',
+    alignItems: 'center',
   },
   typeOptionActive: {
     backgroundColor: GREEN,
     borderColor: GREEN,
   },
   typeOptionText: {
-    fontSize: 14,
-    color: '#555',
+    fontSize: 13,
+    color: '#4C6758',
+    fontWeight: '700',
   },
   typeOptionTextActive: {
     color: '#FFF',
-    fontWeight: '700',
   },
-  tabRow: {
+  methodGrid: {
     flexDirection: 'row',
-    backgroundColor: '#FFF',
-    borderRadius: 10,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  methodOption: {
+    flexGrow: 1,
+    minWidth: 96,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 4,
-  },
-  tabButton: {
-    flex: 1,
-    borderRadius: 8,
+    backgroundColor: '#FFF',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
   },
-  tabButtonActive: {
-    backgroundColor: GREEN,
+  methodOptionActive: {
+    backgroundColor: '#2F5CB7',
+    borderColor: '#2F5CB7',
   },
-  tabButtonDisabled: {
-    backgroundColor: '#F1F1F1',
-  },
-  tabButtonText: {
+  methodOptionText: {
+    fontSize: 12,
     color: '#4C6758',
-    fontSize: 14,
     fontWeight: '700',
   },
-  tabButtonTextActive: {
+  methodOptionTextActive: {
     color: '#FFF',
-  },
-  tabButtonTextDisabled: {
-    color: '#A0A0A0',
-  },
-  disabledHint: {
-    marginTop: 6,
-    color: '#8A8A8A',
-    fontSize: 12,
-  },
-  horseOption: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-  },
-  horseOptionActive: {
-    backgroundColor: LIGHT_GREEN,
-    borderColor: GREEN,
-  },
-  horseOptionDisabled: {
-    opacity: 0.5,
-  },
-  horseOptionName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#222',
-  },
-  horseOptionNameActive: {
-    color: GREEN,
-  },
-  horseOptionNameDisabled: {
-    color: '#999',
-  },
-  horseOptionStats: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  horseOptionStatsActive: {
-    color: GREEN,
   },
   multiToggle: {
     marginTop: 10,
@@ -705,31 +687,69 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  formationSection: {
-    marginTop: 4,
+  selectionHint: {
+    marginTop: 8,
+    color: '#5A6F64',
+    fontSize: 12,
   },
-  previewCard: {
-    marginTop: 18,
+  bottomPanel: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    backgroundColor: '#FFF',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 14,
+  },
+  summaryCard: {
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 10,
-    backgroundColor: '#FFF',
-    padding: 12,
+    padding: 10,
+    backgroundColor: '#FAFCFB',
+    marginBottom: 10,
+    gap: 6,
   },
-  previewTitle: {
+  summaryHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  summaryTitle: {
+    color: '#22322B',
     fontSize: 13,
     fontWeight: '700',
-    color: GREEN,
-    marginBottom: 4,
   },
-  previewCount: {
-    fontSize: 12,
+  summaryPoint: {
+    color: '#E53935',
+    fontSize: 19,
+    fontWeight: '700',
+  },
+  summaryLineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  summaryLineLabel: {
+    width: 56,
     color: '#4C6758',
-    marginBottom: 4,
-  },
-  previewLine: {
     fontSize: 12,
+    fontWeight: '700',
+  },
+  summaryLineValue: {
+    flex: 1,
     color: '#22322B',
-    marginTop: 2,
+    fontSize: 12,
+  },
+  submitBtn: {
+    borderRadius: 8,
+    backgroundColor: '#E74C3C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  submitBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

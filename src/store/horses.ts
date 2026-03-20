@@ -110,6 +110,10 @@ export async function deleteTicket(id: string): Promise<void> {
   });
 }
 
+export async function clearTickets(): Promise<void> {
+  await enqueueListUpdate<unknown>(TICKETS_KEY, () => []);
+}
+
 export function calcStats(
   wins: number,
   second: number,

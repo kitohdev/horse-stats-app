@@ -9,6 +9,7 @@ import {
   formatTicketSelectionSummary,
 } from '../helpers';
 import { TicketProbabilitySummary } from '../types';
+import RankedCombinationLabel from './RankedCombinationLabel';
 
 const GREEN = '#006934';
 const BORDER = '#B2D8C4';
@@ -60,10 +61,13 @@ export default function TicketSetCard({
       ) : (
         summary.topCombinations.map((combination, index) => (
           <View key={combination.key} style={styles.comboRow}>
-            <Text style={styles.comboName}>
-              {index + 1}.{' '}
-              {formatCombinationHorseNames(combination.horseIds, resolveHorseName, config.ordered)}
-            </Text>
+            <RankedCombinationLabel
+              rank={index + 1}
+              text={formatCombinationHorseNames(combination.horseIds, resolveHorseName, config.ordered)}
+              containerStyle={styles.comboLabel}
+              rankStyle={styles.comboRank}
+              textStyle={styles.comboName}
+            />
             <Text style={styles.comboRate}>{formatPercentFromRate(combination.probability)}</Text>
           </View>
         ))
@@ -142,12 +146,18 @@ const styles = StyleSheet.create({
   comboRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: 4,
     gap: 10,
   },
-  comboName: {
+  comboLabel: {
     flex: 1,
+  },
+  comboRank: {
+    color: '#22322B',
+    fontSize: 12,
+  },
+  comboName: {
     color: '#22322B',
     fontSize: 12,
   },

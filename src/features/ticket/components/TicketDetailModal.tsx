@@ -3,6 +3,7 @@ import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { TicketProbabilitySummary } from '../types';
 import { formatCombinationHorseNames, formatPercentFromRate, formatTicketMeta } from '../helpers';
 import { getTicketTypeConfig } from '../constants';
+import RankedCombinationLabel from './RankedCombinationLabel';
 
 const GREEN = '#006934';
 const BORDER = '#B2D8C4';
@@ -48,10 +49,13 @@ export default function TicketDetailModal({
           contentContainerStyle={styles.listContent}
           renderItem={({ item, index }) => (
             <View style={styles.row}>
-              <Text style={styles.rowTitle}>
-                {index + 1}.{' '}
-                {formatCombinationHorseNames(item.horseIds, resolveHorseName, config.ordered)}
-              </Text>
+              <RankedCombinationLabel
+                rank={index + 1}
+                text={formatCombinationHorseNames(item.horseIds, resolveHorseName, config.ordered)}
+                containerStyle={styles.rowTitle}
+                rankStyle={styles.rowRank}
+                textStyle={styles.rowText}
+              />
               <Text style={styles.rowRate}>{formatPercentFromRate(item.probability)}</Text>
             </View>
           )}
@@ -133,9 +137,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowTitle: {
+    flex: 1,
+  },
+  rowRank: {
     color: '#22322B',
     fontSize: 12,
-    flex: 1,
+  },
+  rowText: {
+    color: '#22322B',
+    fontSize: 12,
   },
   rowRate: {
     color: GREEN,

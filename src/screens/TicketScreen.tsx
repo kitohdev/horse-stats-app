@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { deleteTicket, loadHorses, loadTickets, saveTicket } from '../store/horses';
+import { clearTickets, deleteTicket, loadHorses, loadTickets, saveTicket } from '../store/horses';
 import { Horse, Ticket } from '../types';
 import ProbabilityNoticeModal from '../features/ticket/components/ProbabilityNoticeModal';
 import TicketAddModal from '../features/ticket/components/TicketAddModal';
@@ -153,13 +153,38 @@ export default function TicketScreen() {
     ]);
   }
 
+  function handleClearAllTickets(): void {
+    Alert.alert('', '現在の馬券リストが全て削除されます。よろしいですか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: 'OK',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await clearTickets();
+            setTickets([]);
+            setPageIndex(0);
+            setDetailTicketId(null);
+          } catch {
+            Alert.alert('削除に失敗しました', '時間をおいて再試行してください');
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>馬券リスト</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setIsAddModalVisible(true)}>
-          <Text style={styles.addBtnText}>+ 追加</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.clearBtn} onPress={handleClearAllTickets}>
+            <Text style={styles.clearBtnText}>クリア</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setIsAddModalVisible(true)}>
+            <Text style={styles.addBtnText}>+ 追加</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {tickets.length === 0 ? (
@@ -255,6 +280,24 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: GREEN,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clearBtn: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: GREEN,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFF',
+    marginRight: 8,
+  },
+  clearBtnText: {
+    color: GREEN,
+    fontWeight: '600',
+    fontSize: 14,
   },
   addBtn: {
     backgroundColor: GREEN,

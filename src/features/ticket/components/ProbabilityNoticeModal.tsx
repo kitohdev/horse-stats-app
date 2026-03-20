@@ -36,7 +36,7 @@ export default function ProbabilityNoticeModal({
         <View style={styles.card}>
           <Text style={styles.title}>確率について</Text>
           <Text style={styles.message}>
-            このアプリの確率は単純な確率計算に基づく参考値です。実際の結果・数値とは相違がある場合があります。
+            このアプリの確率は単純な確率計算に基づく参考値です。実際の結果・数値とは違う可能性が高いです。
           </Text>
 
           <TouchableOpacity
