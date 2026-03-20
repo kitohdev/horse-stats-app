@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Horse, Ticket } from '../types';
+import { Horse, Ticket, isTicketSet, normalizeTicket } from '../types';
 
 const HORSES_KEY = '@horses';
 const TICKETS_KEY = '@tickets';
@@ -64,22 +64,50 @@ export async function deleteHorse(id: string): Promise<void> {
 }
 
 export async function loadTickets(): Promise<Ticket[]> {
-  return loadList<Ticket>(TICKETS_KEY);
+  const rawTickets = await loadList<unknown>(TICKETS_KEY);
+  const normalizedTickets = rawTickets
+    .map(rawTicket => normalizeTicket(rawTicket))
+    .filter((ticket): ticket is Ticket => ticket !== null);
+
+  const shouldRewrite =
+    normalizedTickets.length !== rawTickets.length ||
+    rawTickets.some(rawTicket => !isTicketSet(rawTicket));
+
+  if (shouldRewrite) {
+    await AsyncStorage.setItem(TICKETS_KEY, JSON.stringify(normalizedTickets)).catch(() => undefined);
+  }
+
+  return normalizedTickets;
 }
 
 export async function saveTicket(ticket: Ticket): Promise<void> {
-  await enqueueListUpdate<Ticket>(TICKETS_KEY, tickets => {
-    const idx = tickets.findIndex(t => t.id === ticket.id);
-    if (idx < 0) return [...tickets, ticket];
+  const normalizedTicket = normalizeTicket(ticket);
+  if (!normalizedTicket) {
+    throw new Error('Invalid ticket payload');
+  }
+
+  await enqueueListUpdate<unknown>(TICKETS_KEY, current => {
+    const tickets = current
+      .map(rawTicket => normalizeTicket(rawTicket))
+      .filter((value): value is Ticket => value !== null);
+
+    const idx = tickets.findIndex(existingTicket => existingTicket.id === normalizedTicket.id);
+    if (idx < 0) return [...tickets, normalizedTicket];
 
     const updated = [...tickets];
-    updated[idx] = ticket;
+    updated[idx] = normalizedTicket;
     return updated;
   });
 }
 
 export async function deleteTicket(id: string): Promise<void> {
-  await enqueueListUpdate<Ticket>(TICKETS_KEY, tickets => tickets.filter(t => t.id !== id));
+  await enqueueListUpdate<unknown>(TICKETS_KEY, current => {
+    const tickets = current
+      .map(rawTicket => normalizeTicket(rawTicket))
+      .filter((value): value is Ticket => value !== null);
+
+    return tickets.filter(ticket => ticket.id !== id);
+  });
 }
 
 export function calcStats(
