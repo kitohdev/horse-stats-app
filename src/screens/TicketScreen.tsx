@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteTicket, loadHorses, loadTickets, saveTicket } from '../store/horses';
 import { Horse, Ticket } from '../types';
+import ProbabilityNoticeModal from '../features/ticket/components/ProbabilityNoticeModal';
 import TicketAddModal from '../features/ticket/components/TicketAddModal';
 import PaginationControls from '../features/ticket/components/PaginationControls';
 import TicketDetailModal from '../features/ticket/components/TicketDetailModal';
@@ -11,12 +13,17 @@ import { calculateTicketProbabilitySummary } from '../features/ticket/probabilit
 import { PageSizeOption, TicketProbabilitySummary } from '../features/ticket/types';
 
 const GREEN = '#006934';
+const PROBABILITY_NOTICE_CONFIRMED_KEY = '@ticket_probability_notice_confirmed';
+type ProbabilityNoticeMode = 'required' | 'info';
 
 export default function TicketScreen() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [horses, setHorses] = useState<Horse[]>([]);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [detailTicketId, setDetailTicketId] = useState<string | null>(null);
+  const [isProbabilityNoticeVisible, setIsProbabilityNoticeVisible] = useState(false);
+  const [probabilityNoticeMode, setProbabilityNoticeMode] =
+    useState<ProbabilityNoticeMode>('info');
 
   const [pageSize, setPageSize] = useState<PageSizeOption>(100);
   const [pageIndex, setPageIndex] = useState(0);
@@ -24,6 +31,19 @@ export default function TicketScreen() {
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
+
+      void AsyncStorage.getItem(PROBABILITY_NOTICE_CONFIRMED_KEY)
+        .then(confirmed => {
+          if (!mounted) return;
+          if (confirmed === '1') return;
+          setProbabilityNoticeMode('required');
+          setIsProbabilityNoticeVisible(true);
+        })
+        .catch(() => {
+          if (!mounted) return;
+          setProbabilityNoticeMode('required');
+          setIsProbabilityNoticeVisible(true);
+        });
 
       Promise.all([loadTickets(), loadHorses()])
         .then(([ticketData, horseData]) => {
@@ -107,6 +127,11 @@ export default function TicketScreen() {
     setIsAddModalVisible(false);
   }
 
+  async function handleConfirmProbabilityNotice(): Promise<void> {
+    await AsyncStorage.setItem(PROBABILITY_NOTICE_CONFIRMED_KEY, '1').catch(() => undefined);
+    setIsProbabilityNoticeVisible(false);
+  }
+
   function handleDelete(ticket: Ticket): void {
     Alert.alert('削除', 'この購入セットを削除しますか？', [
       { text: 'キャンセル', style: 'cancel' },
@@ -156,6 +181,16 @@ export default function TicketScreen() {
             onNextPage={handleNextPage}
           />
 
+          <TouchableOpacity
+            style={styles.noticeLinkButton}
+            onPress={() => {
+              setProbabilityNoticeMode('info');
+              setIsProbabilityNoticeVisible(true);
+            }}
+          >
+            <Text style={styles.noticeLinkText}>※確率について</Text>
+          </TouchableOpacity>
+
           <FlatList
             data={paginatedTickets}
             keyExtractor={item => item.id}
@@ -192,6 +227,15 @@ export default function TicketScreen() {
         resolveHorseName={resolveHorseName}
         onClose={() => setDetailTicketId(null)}
       />
+
+      <ProbabilityNoticeModal
+        visible={isProbabilityNoticeVisible}
+        mode={probabilityNoticeMode}
+        onClose={() => setIsProbabilityNoticeVisible(false)}
+        onConfirm={() => {
+          void handleConfirmProbabilityNotice();
+        }}
+      />
     </View>
   );
 }
@@ -226,6 +270,17 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 16,
+  },
+  noticeLinkButton: {
+    alignSelf: 'flex-end',
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  noticeLinkText: {
+    color: '#2E6F4E',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
   empty: {
     flex: 1,

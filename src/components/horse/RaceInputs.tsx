@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TextInputProps, StyleSheet } from 'react-native';
 import { RACE_FIELD_LABELS } from '../../features/input/constants';
 import { HorseInputValues, RaceField } from '../../features/input/types';
 import { sanitizeRaceInput } from '../../utils/raceInput';
@@ -14,6 +14,8 @@ interface RaceInputsProps {
   compact?: boolean;
   registerInputRef?: (field: RaceField, ref: TextInput | null) => void;
   onSubmitField?: (field: RaceField) => void;
+  onFocusField?: (field: RaceField) => void;
+  resolveReturnKeyType?: (field: RaceField) => TextInputProps['returnKeyType'];
 }
 
 export default function RaceInputs({
@@ -22,6 +24,8 @@ export default function RaceInputs({
   compact = false,
   registerInputRef,
   onSubmitField,
+  onFocusField,
+  resolveReturnKeyType,
 }: RaceInputsProps) {
   return (
     <View style={styles.row}>
@@ -34,8 +38,10 @@ export default function RaceInputs({
             value={values[field]}
             onChangeText={text => onChangeField(field, sanitizeRaceInput(text))}
             keyboardType="number-pad"
-            returnKeyType="next"
+            showSoftInputOnFocus
+            returnKeyType={resolveReturnKeyType?.(field) ?? 'next'}
             blurOnSubmit={false}
+            onFocus={() => onFocusField?.(field)}
             onSubmitEditing={() => onSubmitField?.(field)}
             placeholder="0"
             placeholderTextColor="#AAA"
