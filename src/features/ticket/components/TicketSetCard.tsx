@@ -56,7 +56,7 @@ export default function TicketSetCard({
 
       <Text style={styles.topLabel}>上位3点</Text>
       {summary.topCombinations.length === 0 ? (
-        <Text style={styles.emptyText}>組み合わせがありません</Text>
+        <Text style={styles.emptyText}>フォーメーションがありません</Text>
       ) : (
         summary.topCombinations.map((combination, index) => (
           <View key={combination.key} style={styles.comboRow}>

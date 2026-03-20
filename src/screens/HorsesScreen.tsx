@@ -139,11 +139,11 @@ export default function HorsesScreen() {
       return;
     }
     if (hasEditInvalidInput) {
-      Alert.alert('戦歴は0以上の整数で入力してください');
+      Alert.alert('戦績は0以上の整数で入力してください');
       return;
     }
     if (!hasEditInput) {
-      Alert.alert('戦歴を入力してください');
+      Alert.alert('戦績を入力してください');
       return;
     }
 
@@ -205,7 +205,7 @@ export default function HorsesScreen() {
       {sorted.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>まだ馬が保存されていません</Text>
-          <Text style={styles.emptySubText}>入力タブから戦歴を入力して保存しましょう</Text>
+          <Text style={styles.emptySubText}>入力タブから戦績を入力して保存しましょう</Text>
         </View>
       ) : (
         <FlatList
@@ -276,7 +276,7 @@ export default function HorsesScreen() {
             </View>
 
             <View style={styles.formCard}>
-              <Text style={styles.formLabel}>戦歴</Text>
+              <Text style={styles.formLabel}>戦績</Text>
               <View style={styles.inputRow}>
                 {RACE_FIELD_LABELS.map(field => {
                   const value = editFieldValues[field.key];

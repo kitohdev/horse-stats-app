@@ -276,7 +276,7 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
     }
 
     if (generateTicketCombinations(ticket).length === 0) {
-      Alert.alert('有効な組み合わせがありません', '選択条件を見直してください');
+      Alert.alert('有効なフォーメーションがありません', '選択条件を見直してください');
       return;
     }
 
@@ -356,7 +356,7 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
                   !canUseCombinationTab && styles.tabButtonTextDisabled,
                 ]}
               >
-                組み合わせ
+                フォーメーション
               </Text>
             </TouchableOpacity>
           </View>
@@ -397,7 +397,7 @@ export default function TicketAddModal({ visible, horses, onClose, onSubmitTicke
             </>
           ) : (
             <>
-              <Text style={styles.sectionLabel}>組み合わせ方式</Text>
+              <Text style={styles.sectionLabel}>フォーメーション方式</Text>
               <View style={styles.typeGrid}>
                 {COMBINATION_MODES.map(mode => (
                   <TouchableOpacity

@@ -448,7 +448,7 @@ export default function BulkInputScreen() {
         keyboardDismissMode="on-drag"
       >
         <View style={styles.headerRow}>
-          <Text style={styles.title}>戦歴入力</Text>
+          <Text style={styles.title}>戦績入力</Text>
           {activeTab === 'confirm' && (
             <TouchableOpacity style={styles.newInputButton} onPress={handleStartNewInput}>
               <Text style={styles.newInputButtonText}>新規入力</Text>
@@ -470,7 +470,7 @@ export default function BulkInputScreen() {
             activeOpacity={0.9}
           >
             <Text style={[styles.tabButtonText, activeTab === 'input' && styles.tabButtonTextActive]}>
-              戦歴入力
+              戦績入力
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -479,7 +479,7 @@ export default function BulkInputScreen() {
             activeOpacity={0.9}
           >
             <Text style={[styles.tabButtonText, activeTab === 'confirm' && styles.tabButtonTextActive]}>
-              戦歴確認
+              戦績確認
             </Text>
           </TouchableOpacity>
         </View>
@@ -543,7 +543,7 @@ export default function BulkInputScreen() {
                       ]}
                       onPress={() => handleSortPress('record')}
                     >
-                      <Text style={[styles.recordHeaderText, getHeaderTextStyle('record')]}>戦歴</Text>
+                      <Text style={[styles.recordHeaderText, getHeaderTextStyle('record')]}>戦績</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[

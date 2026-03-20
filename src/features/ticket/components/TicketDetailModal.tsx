@@ -31,7 +31,7 @@ export default function TicketDetailModal({
           <TouchableOpacity onPress={onClose}>
             <Text style={styles.closeText}>閉じる</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>組み合わせ詳細</Text>
+          <Text style={styles.title}>フォーメーション詳細</Text>
           <View style={styles.headerSpacer} />
         </View>
 

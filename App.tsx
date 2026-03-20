@@ -17,7 +17,7 @@ export default function App() {
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             const icons: Record<string, { active: TabIconName; inactive: TabIconName }> = {
-              戦歴: { active: 'calculator', inactive: 'calculator-outline' },
+              戦績: { active: 'calculator', inactive: 'calculator-outline' },
               馬券: { active: 'ticket', inactive: 'ticket-outline' },
             };
             const name = focused ? icons[route.name]?.active : icons[route.name]?.inactive;
@@ -30,7 +30,7 @@ export default function App() {
           headerTitleStyle: { fontWeight: '700' },
         })}
       >
-        <Tab.Screen name="戦歴" component={InputScreen} options={{ title: '戦歴' }} />
+        <Tab.Screen name="戦績" component={InputScreen} options={{ title: '戦績' }} />
         <Tab.Screen name="馬券" component={TicketScreen} options={{ title: '馬券リスト' }} />
       </Tab.Navigator>
     </NavigationContainer>
