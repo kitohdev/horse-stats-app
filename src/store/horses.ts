@@ -44,6 +44,10 @@ export async function loadHorses(): Promise<Horse[]> {
   return loadList<Horse>(HORSES_KEY);
 }
 
+export async function replaceHorses(horses: Horse[]): Promise<void> {
+  await enqueueListUpdate<Horse>(HORSES_KEY, () => horses);
+}
+
 export async function saveHorse(horse: Horse): Promise<void> {
   await enqueueListUpdate<Horse>(HORSES_KEY, horses => {
     const idx = horses.findIndex(h => h.id === horse.id);
