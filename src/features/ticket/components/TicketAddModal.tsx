@@ -11,13 +11,13 @@ const GREEN = '#006934';
 const BORDER = '#B2D8C4';
 
 const COMBINATION_MODE_TABS: ReadonlyArray<{ mode: CombinationMode; label: string }> = [
-  { mode: 'formation', label: '通常フォーメーション' },
+  { mode: 'formation', label: 'フォーメーション' },
   { mode: 'nagashi', label: 'ながし' },
   { mode: 'box', label: 'ボックス' },
 ];
 
 const COMBINATION_MODE_SUMMARY_LABEL: Record<CombinationMode, string> = {
-  formation: '通常フォーメーション',
+  formation: 'フォーメーション',
   nagashi: 'ながし',
   box: 'ボックス',
 };
@@ -58,14 +58,17 @@ function createTicket(
   selection: Ticket['selection'],
   multi: boolean
 ): Ticket {
+  const createdAt = Date.now();
+  const randomSuffix = Math.random().toString(36).slice(2, 10);
+
   return {
-    id: Date.now().toString(),
+    id: `ticket-${createdAt.toString(36)}-${randomSuffix}`,
     type,
     mode,
     selection,
     multi,
     memo: '',
-    createdAt: Date.now(),
+    createdAt,
   };
 }
 

@@ -19,9 +19,18 @@ function hasDuplicatedHorse(horseIds: readonly string[]): boolean {
   return uniqueHorseIds(horseIds).length !== horseIds.length;
 }
 
+function normalizeHorseIdsForCombination(horseIds: readonly string[], ordered: boolean): string[] {
+  return ordered ? [...horseIds] : [...horseIds].sort();
+}
+
+function encodeHorseIdsForKey(horseIds: readonly string[]): string {
+  // Length-prefix encoding avoids key collisions even if IDs include separators.
+  return horseIds.map(horseId => `${horseId.length}:${horseId}`).join('|');
+}
+
 export function createCombinationKey(horseIds: readonly string[], ordered: boolean): string {
-  if (ordered) return horseIds.join('>');
-  return [...horseIds].sort().join('-');
+  const normalizedHorseIds = normalizeHorseIdsForCombination(horseIds, ordered);
+  return encodeHorseIdsForKey(normalizedHorseIds);
 }
 
 function dedupeCombinations(candidates: readonly string[][], ordered: boolean): GeneratedCombination[] {
@@ -31,8 +40,8 @@ function dedupeCombinations(candidates: readonly string[][], ordered: boolean): 
   for (const candidate of candidates) {
     if (candidate.length === 0 || hasDuplicatedHorse(candidate)) continue;
 
-    const normalizedHorseIds = ordered ? [...candidate] : [...candidate].sort();
-    const key = createCombinationKey(normalizedHorseIds, ordered);
+    const normalizedHorseIds = normalizeHorseIdsForCombination(candidate, ordered);
+    const key = encodeHorseIdsForKey(normalizedHorseIds);
     if (seen.has(key)) continue;
 
     seen.add(key);

@@ -16,11 +16,18 @@ const GREEN = '#006934';
 const PROBABILITY_NOTICE_CONFIRMED_KEY = '@ticket_probability_notice_confirmed';
 type ProbabilityNoticeMode = 'required' | 'info';
 
+function createTicketSummaryKey(ticket: Ticket): string {
+  const multiFlag = ticket.multi ? '1' : '0';
+  return `${ticket.id}::${ticket.createdAt}::${ticket.type}::${ticket.mode}::${multiFlag}::${JSON.stringify(
+    ticket.selection
+  )}`;
+}
+
 export default function TicketScreen() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [horses, setHorses] = useState<Horse[]>([]);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
-  const [detailTicketId, setDetailTicketId] = useState<string | null>(null);
+  const [detailTicketKey, setDetailTicketKey] = useState<string | null>(null);
   const [isProbabilityNoticeVisible, setIsProbabilityNoticeVisible] = useState(false);
   const [probabilityNoticeMode, setProbabilityNoticeMode] =
     useState<ProbabilityNoticeMode>('info');
@@ -71,16 +78,24 @@ export default function TicketScreen() {
     [tickets]
   );
 
-  const probabilitySummaryById = useMemo(() => {
-    const entries: Array<[string, TicketProbabilitySummary]> = sortedTickets.map(ticket => [
-      ticket.id,
-      calculateTicketProbabilitySummary(ticket, horsesById, 3),
+  const sortedTicketRows = useMemo(() => {
+    return sortedTickets.map(ticket => ({
+      ticket,
+      summaryKey: createTicketSummaryKey(ticket),
+      summary: calculateTicketProbabilitySummary(ticket, horsesById, 3),
+    }));
+  }, [horsesById, sortedTickets]);
+
+  const probabilitySummaryByKey = useMemo(() => {
+    const entries: Array<[string, TicketProbabilitySummary]> = sortedTicketRows.map(row => [
+      row.summaryKey,
+      row.summary,
     ]);
 
     return new Map<string, TicketProbabilitySummary>(entries);
-  }, [horsesById, sortedTickets]);
+  }, [sortedTicketRows]);
 
-  const totalItems = sortedTickets.length;
+  const totalItems = sortedTicketRows.length;
   const totalPages =
     pageSize === 'all' ? 1 : Math.max(1, Math.ceil(totalItems / pageSize));
 
@@ -92,16 +107,16 @@ export default function TicketScreen() {
   const startIndex =
     pageSize === 'all' ? 0 : Math.min(pageIndex, Math.max(0, totalPages - 1)) * pageSize;
 
-  const paginatedTickets =
+  const paginatedTicketRows =
     pageSize === 'all'
-      ? sortedTickets
-      : sortedTickets.slice(startIndex, startIndex + pageSize);
+      ? sortedTicketRows
+      : sortedTicketRows.slice(startIndex, startIndex + pageSize);
 
   const pageStart = totalItems === 0 ? 0 : startIndex + 1;
-  const pageEnd = totalItems === 0 ? 0 : startIndex + paginatedTickets.length;
+  const pageEnd = totalItems === 0 ? 0 : startIndex + paginatedTicketRows.length;
 
   const detailSummary =
-    detailTicketId === null ? null : probabilitySummaryById.get(detailTicketId) ?? null;
+    detailTicketKey === null ? null : probabilitySummaryByKey.get(detailTicketKey) ?? null;
 
   const resolveHorseName = useCallback(
     (horseId: string) => horsesById.get(horseId)?.name ?? '?',
@@ -132,7 +147,7 @@ export default function TicketScreen() {
     setIsProbabilityNoticeVisible(false);
   }
 
-  function handleDelete(ticket: Ticket): void {
+  function handleDelete(ticket: Ticket, summaryKey: string): void {
     Alert.alert('削除', 'この購入セットを削除しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       {
@@ -142,8 +157,8 @@ export default function TicketScreen() {
           try {
             await deleteTicket(ticket.id);
             setTickets(prev => prev.filter(current => current.id !== ticket.id));
-            if (detailTicketId === ticket.id) {
-              setDetailTicketId(null);
+            if (detailTicketKey === summaryKey) {
+              setDetailTicketKey(null);
             }
           } catch {
             Alert.alert('削除に失敗しました', '時間をおいて再試行してください');
@@ -164,7 +179,7 @@ export default function TicketScreen() {
             await clearTickets();
             setTickets([]);
             setPageIndex(0);
-            setDetailTicketId(null);
+            setDetailTicketKey(null);
           } catch {
             Alert.alert('削除に失敗しました', '時間をおいて再試行してください');
           }
@@ -217,21 +232,17 @@ export default function TicketScreen() {
           </TouchableOpacity>
 
           <FlatList
-            data={paginatedTickets}
-            keyExtractor={item => item.id}
+            data={paginatedTicketRows}
+            keyExtractor={(item, index) => `${item.summaryKey}:${startIndex + index}`}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => {
-              const summary =
-                probabilitySummaryById.get(item.id) ??
-                calculateTicketProbabilitySummary(item, horsesById, 3);
-
               return (
                 <TicketSetCard
-                  ticket={item}
-                  summary={summary}
+                  ticket={item.ticket}
+                  summary={item.summary}
                   resolveHorseName={resolveHorseName}
-                  onPress={() => setDetailTicketId(item.id)}
-                  onDelete={() => handleDelete(item)}
+                  onPress={() => setDetailTicketKey(item.summaryKey)}
+                  onDelete={() => handleDelete(item.ticket, item.summaryKey)}
                 />
               );
             }}
@@ -250,7 +261,7 @@ export default function TicketScreen() {
         visible={detailSummary !== null}
         summary={detailSummary}
         resolveHorseName={resolveHorseName}
-        onClose={() => setDetailTicketId(null)}
+        onClose={() => setDetailTicketKey(null)}
       />
 
       <ProbabilityNoticeModal
