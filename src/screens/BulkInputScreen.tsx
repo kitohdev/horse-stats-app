@@ -21,7 +21,7 @@ import RaceInputs from '../components/horse/RaceInputs';
 import { MAX_BULK_HORSES, RACE_FIELD_LABELS } from '../features/input/constants';
 import { createBulkHorseInputValues, parseHorseInput } from '../features/input/helpers';
 import { HorseInputValues, RaceField } from '../features/input/types';
-import { replaceHorses } from '../store/horses';
+import { loadHorses, replaceHorses } from '../store/horses';
 import { Horse } from '../types';
 
 const GREEN = '#006934';
@@ -101,8 +101,46 @@ function toHorseRecord(row: ConfirmedHorseRecord, createdAt: number): Horse {
   };
 }
 
+function toPositiveInteger(value: string): number | null {
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveHorseNumber(horse: Horse): number | null {
+  const byId = /^horse-(\d+)$/.exec(horse.id);
+  if (byId) {
+    return toPositiveInteger(byId[1]);
+  }
+
+  return toPositiveInteger(horse.name.trim());
+}
+
+function createBulkInputsFromHorses(horses: Horse[]): HorseInputValues[] {
+  const nextInputs = createBulkHorseInputValues();
+
+  horses.forEach(horse => {
+    const horseNumber = resolveHorseNumber(horse);
+    if (!horseNumber || horseNumber > MAX_BULK_HORSES) {
+      return;
+    }
+
+    const index = horseNumber - 1;
+    nextInputs[index] = {
+      ...nextInputs[index],
+      wins: String(horse.wins),
+      second: String(horse.second),
+      third: String(horse.third),
+      other: String(horse.other),
+    };
+  });
+
+  return nextInputs;
+}
+
 export default function BulkInputScreen() {
   const [inputs, setInputs] = useState<HorseInputValues[]>(createBulkHorseInputValues);
+  const [hasHydrated, setHasHydrated] = useState(false);
   const [activeTab, setActiveTab] = useState<ScreenTab>('input');
   const [sortKey, setSortKey] = useState<ConfirmSortKey>('horseNumber');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -394,6 +432,32 @@ export default function BulkInputScreen() {
   }, [activeTab, tabSlide]);
 
   useEffect(() => {
+    let mounted = true;
+
+    loadHorses()
+      .then(savedHorses => {
+        if (!mounted) return;
+        setInputs(createBulkInputsFromHorses(savedHorses));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setInputs(createBulkHorseInputValues());
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setHasHydrated(true);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+
     const snapshot = JSON.stringify(previewRows);
     if (snapshot === persistedPreviewSnapshotRef.current) {
       return;
@@ -407,7 +471,7 @@ export default function BulkInputScreen() {
     return () => {
       clearTimeout(timer);
     };
-  }, [previewRows]);
+  }, [hasHydrated, previewRows]);
 
   function shouldCaptureHorizontalSwipe(dx: number, dy: number): boolean {
     const absDx = Math.abs(dx);
